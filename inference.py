@@ -4,12 +4,18 @@ import cv2
 import tensorflow as tf
 import numpy as np
 import time
+import argparse
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument('--video_name', type=str, required=True)
+args = parser.parse_args()
 
 class_names = ["Angry", "Disgust", "Fear", "Happy", "Neutral", "Sad", "Surprise"]
 
 model = tf.keras.models.load_model('models/model0.keras')
 
-cap = cv2.VideoCapture('testing/test_video2.mp4')
+cap = cv2.VideoCapture(f'testing/{args.video_name}')
 
 faceDetect = cv2.CascadeClassifier('haarcascades/haarcascade_frontalface_default.xml')
 

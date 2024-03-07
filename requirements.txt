@@ -1,0 +1,8 @@
+keras
+mlflow
+numpy
+opencv_contrib_python
+opencv_python
+pandas
+scikit_learn
+tensorflow
