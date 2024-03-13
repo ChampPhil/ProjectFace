@@ -5,15 +5,18 @@ import tensorflow as tf
 import numpy as np
 import time
 import argparse
+import mlflow 
+
 
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--video_name', type=str, required=True)
+parser.add_argument('--model_dirname', type=str, required=True)
 args = parser.parse_args()
 
 class_names = ["Angry", "Disgust", "Fear", "Happy", "Neutral", "Sad", "Surprise"]
 
-model = tf.keras.models.load_model('models/model0.keras')
+model = mlflow.keras.load_model(f"mlruns/Fer2013-Experiment/{args.model_dirname}/artifacts/model")
 
 cap = cv2.VideoCapture(f'testing/{args.video_name}')
 
@@ -47,12 +50,15 @@ while True:
 
     for x, y, w, h in faces:
         sub_face_img = frame[y : y + h, x : x + w]
+
         resized = cv2.resize(sub_face_img, (48, 48))
+
         normalize = resized / 255.0
+        
         reshaped = np.reshape(normalize, (1, 48, 48, 3))
         result = model.predict(reshaped)
         label = np.argmax(result, axis=1)[0]
-        print(label)
+       
         cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 1)
         cv2.rectangle(frame, (x, y), (x + w, y + h), (50, 50, 255), 2)
         cv2.rectangle(frame, (x, y - 40), (x + w, y), (50, 50, 255), -1)
