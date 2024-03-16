@@ -27,7 +27,7 @@ from tensorflow import keras
 import keras_tuner as kt
 import argparse
 import sqlite3
-from numba import cuda
+
 
 sqliteConnection = sqlite3.connect('data.db')
 
@@ -99,9 +99,9 @@ val_ds = configure_for_performance(val_ds)
 
 
 inputs = tf.keras.Input(shape=expected_res)
-if args.base_model == 'RegNetY080' or args.base_model == 'RegNetX080':
+if args.base_model == 'RegNetY064' or args.base_model == 'RegNetX064':
     x = tf.keras.applications.regnet.preprocess_input(inputs)
-    if args.base_model == 'RegNetY080':
+    if args.base_model == 'RegNetY064':
         base_model = tf.keras.applications.regnet.RegNetY064(weights='imagenet', include_top=False, input_shape=expected_res)
     else:
         base_model = tf.keras.applications.regnet.RegNetX064(weights='imagenet', include_top=False, input_shape=expected_res)
@@ -180,14 +180,14 @@ def model_builder(hp):
 
 
 
-""""
+
 tuner = kt.Hyperband(
     model_builder,
     objective=[kt.Objective("val_auc", direction="max"), kt.Objective('val_accuracy', direction="max"), 
                kt.Objective('val_loss', direction="min"), kt.Objective('val_f1_score', direction="max")],
     hyperband_iterations=1,
-    max_epochs=max_epoch_num,
-    factor=5, 
+    max_epochs=16,
+    factor=3, 
     directory='FER2013_TrainedNetworks',
     project_name=f'{args.base_model}__Models',
     overwrite=True
@@ -204,7 +204,7 @@ tuner = kt.BayesianOptimization(
     project_name=f'{args.base_model}__Models'
 
 )
-
+"""
 
 class_weights  = {0: 3.62304392, 1: 32.77283105, 2: 3.50366122, 
                 3: 1.99617578, 4: 2.95299321, 
@@ -213,7 +213,7 @@ class_weights  = {0: 3.62304392, 1: 32.77283105, 2: 3.50366122,
 
 stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5)
 print("Fitting model")
-tuner.search(train_ds, validation_data=val_ds, use_multiprocessing=True, workers=8, epochs=5, class_weight=class_weights, validation_split=0.2, callbacks=[stop_early])
+tuner.search(train_ds, validation_data=val_ds, use_multiprocessing=True, workers=8, class_weight=class_weights, validation_split=0.2, callbacks=[stop_early])
 print("Finished")
 # Get the optimal hyperparameters
 best_hps=tuner.get_best_hyperparameters(num_trials=1)[0]

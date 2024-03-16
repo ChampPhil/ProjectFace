@@ -1,5 +1,5 @@
 import json
-from numba import cuda
+
 import pickle
 import numpy as np
 import tensorflow as tf
@@ -108,7 +108,7 @@ train_ds = configure_for_performance(train_ds)
 val_ds = configure_for_performance(val_ds)
 print(train_ds)
 
-if hyperparameter_set[0] == 'RegNetY080':
+if hyperparameter_set[0] == 'RegNetY064':
     #Speed
     base_model = tf.keras.applications.regnet.RegNetY064(weights='imagenet', include_top=False, input_shape=expected_res)
 elif hyperparameter_set[0] == 'MobilenetV3-Small':
@@ -117,7 +117,7 @@ elif  hyperparameter_set[0] == 'MobilenetV3-Large':
     base_model = tf.keras.applications.MobileNetV3Large(weights='imagenet', include_top=False, input_shape=expected_res)
 elif  hyperparameter_set[0] == 'EfficientNetV2B3':
     base_model = tf.keras.applications.EfficientNetV2B3(weights='imagenet', include_top=False, input_shape=expected_res)
-elif  hyperparameter_set[0] == 'RegNetX080':
+elif  hyperparameter_set[0] == 'RegNetX064':
     #Accuracy
     base_model = tf.keras.applications.regnet.RegNetX064(weights='imagenet', include_top=False, input_shape=expected_res)
 
@@ -137,7 +137,7 @@ inputs = tf.keras.Input(shape=expected_res)
 
 
 
-if args.base_model == 'RegNetY080' or args.base_model == 'RegNetX080':
+if args.base_model == 'RegNetY064' or args.base_model == 'RegNetX064':
     x = tf.keras.applications.regnet.preprocess_input(inputs)
 elif args.base_model == 'VGG16':
     x = tf.keras.applications.vgg16.preprocess_input(inputs)
@@ -155,13 +155,20 @@ x = tf.keras.layers.RandomFlip(
                                 mode="horizontal",
                                 seed=100)(x)
 
-x = base_model(x)
-x = Flatten()(x)
+x = base_model(x, training=False)
 
-for i in range(1, hyperparameter_set[3]+1):
+x = GlobalAveragePooling2D()(x)
+
+for i in range(1, 12):
     #[1, 2, 3]
+    """
     x = BatchNormalization()(x)
     x = Dense(hyperparameter_set[2], activation=nonlinear_activation, kernel_regularizer=regularizers.l2(0.01))(x)
+    x = Dropout(0.5)(x)
+    """
+
+    x = BatchNormalization()(x)
+    x = Dense(512, activation=nonlinear_activation, kernel_regularizer=regularizers.l2(0.001))(x)
     x = Dropout(0.5)(x)
 
 x = BatchNormalization()(x)
@@ -177,7 +184,7 @@ print("\n\n\n\n\n\n\n\n\n")
 early_stopping = EarlyStopping(patience=15, restore_best_weights=False)
 ## Now train the model
 
-epochs = 225
+epochs = 175
 steps_per_epoch = 28709 // batch_size
 
 base_lr = hyperparameter_set[4]
@@ -187,16 +194,17 @@ opt = Adam(learning_rate=base_lr)
 
 model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy', tf.keras.metrics.F1Score(average="macro"), tf.keras.metrics.AUC(multi_label=True, num_labels=7)])
 
-
+"""
 class_weights  ={0: 3.62304392, 1: 32.77283105, 2: 3.50366122, 
                     3: 1.99617578, 4: 2.95299321, 
-                    5: 4.48297939, 6: 2.89521985} 
+                    5: 4.48297939, 6: 2.89521985}
+"""
+
 print("Fitting model")
 model.fit(train_ds,
         batch_size = batch_size,
         validation_data = val_ds,
         epochs = epochs,
-        class_weight=class_weights,
         callbacks=[early_stopping],
         use_multiprocessing = True,
         workers=8
@@ -233,8 +241,6 @@ sqliteConnection.close()
 print("\n\n\n\n----------------------------------------------------\nMODEL IS DONE BEING TRAINED\n\n\n\n\n\n\n\n\n\n\n-----------------------------------------------------------\n\n\n\n")
 
 
-device = cuda.get_current_device()
-device.reset()  # This will release all GPU memory
 
 
 
