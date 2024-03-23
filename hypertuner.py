@@ -7,7 +7,6 @@ from tensorflow.keras import optimizers
 from tensorflow.keras.optimizers.experimental import SGD
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.optimizers import Adamax
-import yaml
 from keras.utils import plot_model
 from tensorflow.keras import metrics
 from tensorflow.keras.models import Model, Sequential
@@ -20,9 +19,6 @@ from sklearn.utils.class_weight import compute_class_weight
 import os
 import argparse
 import sys
-import mlflow
-import yaml
-from mlflow.models.signature import infer_signature
 from tensorflow import keras
 import keras_tuner as kt
 import argparse
@@ -34,11 +30,11 @@ sqliteConnection = sqlite3.connect('data.db')
 physical_devices = tf.config.list_physical_devices('GPU')
 
 
-"""
 for gpu_instance in physical_devices:
     tf.config.experimental.set_memory_growth(gpu_instance, True)
-"""
 
+
+"""
 gpus = tf.config.list_physical_devices('GPU')
 if gpus:
   # Restrict TensorFlow to only allocate 1GB of memory on the first GPU
@@ -51,10 +47,10 @@ if gpus:
   except RuntimeError as e:
     # Virtual devices must be set before GPUs have been initialized
     print(e)
-
-
-train_dir = os.path.join('fer2013_pics', 'train')
-test_dir =  os.path.join('fer2013_pics', 'test')
+"""
+data_dir = 'fer2013_pics'
+train_dir = os.path.join(data_dir, 'train')
+test_dir =  os.path.join(data_dir, 'test')
 tf.random.set_seed(42)
 
 parser = argparse.ArgumentParser()
@@ -180,20 +176,34 @@ def model_builder(hp):
 
 
 
+def searcher():
+    try:
+        tuner = kt.Hyperband(
+        model_builder,
+        objective=[kt.Objective("val_auc", direction="max"), kt.Objective('val_accuracy', direction="max"), 
+                   kt.Objective('val_loss', direction="min"), kt.Objective('val_f1_score', direction="max")],
+        hyperband_iterations=1,
+        max_epochs=16,
+        factor=3, 
+        directory='FER2013_TrainedNetworks',
+        project_name=f'{args.base_model}__Models'
+        )
 
-tuner = kt.Hyperband(
-    model_builder,
-    objective=[kt.Objective("val_auc", direction="max"), kt.Objective('val_accuracy', direction="max"), 
-               kt.Objective('val_loss', direction="min"), kt.Objective('val_f1_score', direction="max")],
-    hyperband_iterations=1,
-    max_epochs=16,
-    factor=3, 
-    directory='FER2013_TrainedNetworks',
-    project_name=f'{args.base_model}__Models',
-    overwrite=True
-    )
+        class_weights  = {0: 3.62304392, 1: 32.77283105, 2: 3.50366122, 
+                        3: 1.99617578, 4: 2.95299321, 
+                        5: 4.48297939, 6: 2.89521985} 
+        
+        
+        stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5)
+        print("Fitting model")
+        tuner.search(train_ds, validation_data=val_ds, use_multiprocessing=True, workers=8, class_weight=class_weights, validation_split=0.2, callbacks=[stop_early])
+        print("Finished")
 
-
+        return tuner
+    except:
+        #If OOM issues, continue where we left off
+        print("\n\n\n\n....OOM Issues Encountered - Starting Over")
+        searcher()
 """
 tuner = kt.BayesianOptimization(
     model_builder,
@@ -206,16 +216,9 @@ tuner = kt.BayesianOptimization(
 )
 """
 
-class_weights  = {0: 3.62304392, 1: 32.77283105, 2: 3.50366122, 
-                3: 1.99617578, 4: 2.95299321, 
-                5: 4.48297939, 6: 2.89521985} 
 
-
-stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5)
-print("Fitting model")
-tuner.search(train_ds, validation_data=val_ds, use_multiprocessing=True, workers=8, class_weight=class_weights, validation_split=0.2, callbacks=[stop_early])
-print("Finished")
 # Get the optimal hyperparameters
+tuner = searcher()
 best_hps=tuner.get_best_hyperparameters(num_trials=1)[0]
 print(best_hps)
 
@@ -243,6 +246,3 @@ sqliteConnection.commit()
 # close the connection
 sqliteConnection.close()
 
-
-device = cuda.get_current_device()
-device.reset()  # This will release all GPU memory
